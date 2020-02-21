@@ -6,6 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+# vscode
+.vscode
+.idea
+
+# sandbox
+sandbox.py
+
 # Distribution / packaging
 .Python
 build/
