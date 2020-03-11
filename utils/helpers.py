@@ -4,14 +4,14 @@ import pandas as pd
 import seaborn as sns
 
 from sklearn.model_selection import train_test_split, cross_val_predict, cross_val_score
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import roc_auc_score, roc_curve, f1_score, recall_score
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+from sklearn.metrics import roc_auc_score, roc_curve, f1_score, recall_score, mean_squared_error, r2_score
 from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge, Lasso
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, RandomForestRegressor
 from sklearn.svm import SVR
 from typing import Optional
-from xgboost import XGBClassifier, XGBRegressor
+# from xgboost import XGBClassifier, XGBRegressor
 
 
 def get_categorical_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -165,7 +165,7 @@ def run_classification_models(X, y, models: Optional[dict], test_size=0.3, rando
         'Logistic Regression': LogisticRegression,
         'Decision Tree'      : DecisionTreeClassifier,
         'Random Forest'      : RandomForestClassifier,
-        'XGBoost'            : XGBClassifier,
+        # 'XGBoost'            : XGBClassifier,
         'Gradient Boosting'  : GradientBoostingClassifier
     }
 
@@ -207,7 +207,30 @@ def run_classification_models(X, y, models: Optional[dict], test_size=0.3, rando
     return auc_scores
 
 
-def run_regression_models(X, y, models: Optional[dict], k=3):
+def one_hot_encode(df: pd.DataFrame) -> pd.DataFrame:
+
+    cols = get_numerical_df(df).columns
+    encoder = OneHotEncoder()
+
+    for col in cols:
+        df[col] = encoder.fit_transform(df[col])
+
+    return df
+
+
+def label_encode(df: pd.DataFrame) -> pd.DataFrame:
+
+    cols = get_categorical_df(df).columns
+    encoder = LabelEncoder()
+
+    for col in cols:
+        df[col] = encoder.fit_transform(df[col])
+
+    return df
+
+
+
+def run_regression_models(X, y, models: Optional[dict], k=3, test_size=0.3, random_state=42) -> dict:
 
     regression_models = {
         'Linear Regression' : LinearRegression,
@@ -216,28 +239,42 @@ def run_regression_models(X, y, models: Optional[dict], k=3):
         'Decision Tree'     : DecisionTreeRegressor,
         'Random Forest'     : RandomForestRegressor,
         'SVR'               : SVR,
-        'XGBoost'           : XGBRegressor
+        # 'XGBoost'           : XGBRegressor
     }
 
     if models:
         regression_models.update(models)
+    
+    def run_model(name, model):
 
-    def run_model(model):
-        x_scaler = StandardScaler()
-        y_scaler = StandardScaler()
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
 
-        X_transform = x_scaler.fit_transform(X)
-        y_transform = y_scaler.fit_transform(y)
+        model.fit(X_train, y_train)
+        score = model.score(X_test, y_test)
 
-        y_pred  = cross_val_predict(model, X_transform, y_transform, cv=k)
-        rms_log = cross_val_score(model, X_transform, y_transform, cv=k, scoring='neg_mean_squared_log_error')
+        print(model_name + " : " + str(score))
 
-        return np.sqrt(abs(np.mean(rms_log))), y_pred
+        return model, score
 
-    rmsle_score = {}
+    results = {}
 
-    for model_name, model_obj in models.items():
-        print('Regression Metrics for {}:\n'.format(model_name))
-        rmsle_score[model_name] = run_model(model_obj)
+    for model_name, model_obj in regression_models.items():
+        model, score = run_model(model_name, model_obj())
+        results[model_name] = {'model': model, 'score': score}
 
-    return rmsle_score
+    return results
+
+
+def run_model_on_test(model, test_df):
+
+    y_pred = model.predict(test_df)
+    return y_pred
+
+
+def generate_heatmap(df: pd.DataFrame):
+    corr = get_numerical_df(df).corr()
+    sns.heatmap(corr, anot=True)
+
+
+class RegressionException(Exception):
+    """Raised when the regression methods encounters an Exception"""
